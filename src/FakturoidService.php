@@ -15,6 +15,8 @@ class FakturoidService
 	private $parameters;
 	/** @var \Nette\Localization\ITranslator */
 	private $translator;
+	/** @var \Sellastica\Integroid\Service\IntegroidUserService */
+	private $integroidUserService;
 
 
 	/**
@@ -22,6 +24,7 @@ class FakturoidService
 	 * @param \Fakturoid\Client $fakturoid
 	 * @param \Sellastica\Crm\Entity\Invoice\Service\InvoiceService $invoiceService
 	 * @param \Sellastica\Crm\Entity\TariffHistory\Service\TariffHistoryService $tariffHistoryService
+	 * @param \Sellastica\Integroid\Service\IntegroidUserService $integroidUserService
 	 * @param \Nette\Localization\ITranslator $translator
 	 */
 	public function __construct(
@@ -29,6 +32,7 @@ class FakturoidService
 		\Fakturoid\Client $fakturoid,
 		\Sellastica\Crm\Entity\Invoice\Service\InvoiceService $invoiceService,
 		\Sellastica\Crm\Entity\TariffHistory\Service\TariffHistoryService $tariffHistoryService,
+		\Sellastica\Integroid\Service\IntegroidUserService $integroidUserService,
 		\Nette\Localization\ITranslator $translator
 	)
 	{
@@ -37,6 +41,7 @@ class FakturoidService
 		$this->tariffHistoryService = $tariffHistoryService;
 		$this->parameters = $parameters;
 		$this->translator = $translator;
+		$this->integroidUserService = $integroidUserService;
 	}
 
 	/**
@@ -247,5 +252,62 @@ class FakturoidService
 		}
 
 		return $billingAddress->getTin();
+	}
+
+	/**
+	 * @param string $q
+	 * @return int|null
+	 */
+	public function findContactId(string $q): ?int
+	{
+		$response = $this->fakturoid->searchSubjects(['query' => $q]);
+		$body = $response->getBody();
+		if (isset($body[0])) {
+			return $body[0]->id;
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param \Sellastica\Project\Entity\Project $project
+	 * @return int
+	 */
+	public function createContact(\Sellastica\Project\Entity\Project $project): int
+	{
+		$billingAddress = $project->getBillingAddress();
+		$data = [
+			'name' => $billingAddress && $billingAddress->getCompanyOrFullName()
+				? $billingAddress->getCompanyOrFullName()
+				: $project->getShortTitle(),
+			'street' => $billingAddress ? $billingAddress->getStreet() : null,
+			'city' => $billingAddress ? $billingAddress->getCity() : null,
+			'zip' => $billingAddress ? $billingAddress->getZip() : null,
+			'country' => $billingAddress && $billingAddress->getCountry()
+				? $billingAddress->getCountry()->getCode()
+				: null,
+			'registration_no' => $billingAddress ? $billingAddress->getCin() : null,
+			'vat_no' => $billingAddress
+				? $this->getTin($billingAddress)
+				: null,
+			'email' => $project->getInvoiceEmail() ?? $project->getEmail(),
+			'phone' => $project->getPhone(),
+			'web' => $project->getDefaultUrl()->getAbsoluteUrl(),
+		];
+
+		//admin user email
+		if ($user = $this->integroidUserService->findOneByProjectId($project->getId())) {
+			$email = $user->getContact()->getEmail()->getEmail();
+			if ($email !== $project->getEmail()) {
+				$data['email_copy'] = $email;
+			}
+		}
+
+		$data = \Sellastica\Utils\Arrays::filterNulls($data);
+		$response = $this->fakturoid->createSubject($data);
+
+		/** @var \stdClass $body */
+		$body = $response->getBody();
+		return $body->id;
 	}
 }
