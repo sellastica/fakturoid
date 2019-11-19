@@ -149,11 +149,12 @@ class FakturoidService
 	/**
 	 * @param \Sellastica\Project\Entity\Project $project
 	 * @param \stdClass $fakturoidInvoice
+	 * @return \Sellastica\Crm\Entity\Invoice\Entity\Invoice
 	 */
 	public function createLocalInvoice(
 		\Sellastica\Project\Entity\Project $project,
 		\stdClass $fakturoidInvoice
-	): void
+	): \Sellastica\Crm\Entity\Invoice\Entity\Invoice
 	{
 		$invoice = $this->invoiceService->create(
 			$project->getId(),
@@ -171,6 +172,7 @@ class FakturoidService
 			$invoice,
 			$fakturoidInvoice
 		);
+		return $invoice;
 	}
 
 	/**
