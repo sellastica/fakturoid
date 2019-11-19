@@ -3,7 +3,7 @@ namespace Sellastica\Fakturoid\Service;
 
 class FakturoidService
 {
-	private const REQUIRED_TAG = 'Povinná';
+	const REQUIRED_TAG = 'Povinná';
 
 	/** @var \Fakturoid\Client */
 	private $fakturoid;
@@ -77,7 +77,7 @@ class FakturoidService
 		$invoice->setExternalUrl($fakturoidInvoice->public_html_url);
 		$invoice->setPriceToPay($fakturoidInvoice->remaining_amount);
 		$invoice->setPaidAmount(
-			//fakturoid used home currency for paid amount even if invoice is in foreign currency
+		//fakturoid used home currency for paid amount even if invoice is in foreign currency
 			$fakturoidInvoice->paid_amount > $invoice->getPriceToPay()
 				? $invoice->getPriceToPay()
 				: $fakturoidInvoice->paid_amount
@@ -174,17 +174,35 @@ class FakturoidService
 	}
 
 	/**
-	 * @param \Sellastica\Project\Entity\Project $project
-	 * @param \Sellastica\Crm\Entity\TariffHistory\Entity\TariffHistory $tariffHistory
-	 * @param \Sellastica\Localization\Model\Currency $currency
+	 * @param string $title
 	 * @param float $unitPrice
+	 * @param \Sellastica\Localization\Model\Currency $currency
+	 * @param bool $vatPayer
 	 * @return array
 	 */
-	public function getFakturoidInvoiceData(
-		\Sellastica\Project\Entity\Project $project,
-		\Sellastica\Crm\Entity\TariffHistory\Entity\TariffHistory $tariffHistory,
+	public function getLineData(
+		string $title,
+		float $unitPrice,
 		\Sellastica\Localization\Model\Currency $currency,
-		float $unitPrice
+		bool $vatPayer
+	): array
+	{
+		return [
+			'name' => $title,
+			'quantity' => 1,
+			'unit_price' => $unitPrice,
+			'vat_rate' => $vatPayer && $currency->isEur() ? 0 : 21,
+		];
+	}
+
+	/**
+	 * @param \Sellastica\Project\Entity\Project $project
+	 * @param \Sellastica\Localization\Model\Currency $currency
+	 * @return array
+	 */
+	public function getProformaInvoiceHeaderData(
+		\Sellastica\Project\Entity\Project $project,
+		\Sellastica\Localization\Model\Currency $currency
 	): array
 	{
 		$billingAddress = $project->getBillingAddress();
@@ -210,16 +228,7 @@ class FakturoidService
 			'payment_method' => 'bank',
 			'round_total' => true,
 			'currency' => $currency->getCode(),
-			'tags' => ['Povinná'],
 			'note' => $this->translator->translate('admin.accounting.we_invoice_you_for_project', ['project' => $project->getShortTitle()]),
-			'lines' => [[
-				'name' => $tariffHistory->getTitle(),
-				'quantity' => 1,
-				'unit_price' => $unitPrice,
-				'vat_rate' => $project->isVatPayer() && $project->getCurrency()->getCode() === 'EUR'
-					? 0
-					: 21,
-			]],
 		]);
 
 		//bank account
@@ -309,5 +318,36 @@ class FakturoidService
 		/** @var \stdClass $body */
 		$body = $response->getBody();
 		return $body->id;
+	}
+
+	/**
+	 * @param \Sellastica\Project\Entity\Project $project
+	 * @return int
+	 * @throws \Exception
+	 */
+	public function findOrCreateContact(
+		\Sellastica\Project\Entity\Project $project
+	): int
+	{
+		$billingAddress = $project->getBillingAddress();
+		if ($billingAddress
+			&& $billingAddress->getCin()
+			&& $externalId = $this->findContactId($billingAddress->getCin())) {
+			return $externalId;
+		} elseif ($externalId = $this->findContactId($project->getEmail())) {
+			return $externalId;
+		} else {
+			return $this->createContact($project);
+		}
+	}
+
+	/**
+	 * @param array $data
+	 * @return \stdClass|null
+	 */
+	public function createProformaInvoice(array $data): ?\stdClass
+	{
+		$response = $this->fakturoid->createInvoice($data);
+		return $response->getBody();
 	}
 }

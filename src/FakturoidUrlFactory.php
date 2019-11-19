@@ -47,6 +47,6 @@ class FakturoidUrlFactory
 	 */
 	public static function subject(int $subjectId): string
 	{
-		return self::BASE_URL . '/invoices/subjects/' . $subjectId;
+		return self::BASE_URL . '/subjects/' . $subjectId;
 	}
 }
