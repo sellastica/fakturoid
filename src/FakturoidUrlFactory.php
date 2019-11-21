@@ -42,6 +42,15 @@ class FakturoidUrlFactory
 	}
 
 	/**
+	 * @param int $id
+	 * @return string
+	 */
+	public static function sendProforma(int $id): string
+	{
+		return self::proforma($id) . '/message/new';
+	}
+
+	/**
 	 * @param int $subjectId
 	 * @return string
 	 */

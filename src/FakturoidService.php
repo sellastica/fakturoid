@@ -352,4 +352,14 @@ class FakturoidService
 		$response = $this->fakturoid->createInvoice($data);
 		return $response->getBody();
 	}
+
+	/**
+	 * @param \Sellastica\Crm\Entity\Invoice\Entity\Invoice $invoice
+	 * @throws \Fakturoid\Exception
+	 */
+	public function sendInvoice(\Sellastica\Crm\Entity\Invoice\Entity\Invoice $invoice): void
+	{
+		$this->fakturoid->fireInvoice($invoice->getExternalId(), 'deliver');
+		$invoice->setSent(new \DateTime());
+	}
 }
